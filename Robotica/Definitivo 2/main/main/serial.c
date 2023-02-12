@@ -12,8 +12,9 @@
 long BAUD0 = (F_CPU/16/USART0_BAUDRATE)-1;
 //long BAUD1 = (F_CPU/16/USART1_BAUDRATE)-1;
 //long BAUD2 = (F_CPU/16/USART2_BAUDRATE)-1;
+unsigned char temp[3];
 
-int recv;
+
 float ABS(double x){
 	if(x<0) x*=-1;
 	return x;
@@ -43,10 +44,10 @@ void Serial_Tx(unsigned char data)
 	while ( !( UCSR0A & (1<<UDRE0)) );
 	UDR0=data;
 }
-/*unsigned char*/int Serial_Rx( void )
+unsigned char Serial_Rx( void )
 {
-	//while ( !(UCSR0A & (1<<RXC0)) ); 
-	return recv;
+	while ( !(UCSR0A & (1<<RXC0)) );
+	return UDR0;
 }
 
 void Serial_Send_Int(int64_t num)
@@ -126,7 +127,7 @@ void Serial_Send_Float(double data)
 	Serial_Send_Int(NuM);
 }
 
-/*double Serial_Recv_Num()
+double Serial_Recv_Num()
 {
 	int i=0;
 	char num[64];
@@ -141,9 +142,38 @@ void Serial_Send_Float(double data)
 	}
 	double Num=atof(num);				//converte la stringa in un float
 	return Num;
-}*/
-
-ISR(USART0_RX_vect){
-	recv = UDR0;
 }
 
+
+
+
+
+
+void Serial_Tx1(int data) {
+	
+	if (data>99) {
+		for (int k=0; k<3; k++){
+			temp[k] = data%10;
+			data = data / 10;
+		}
+		}else if(data>9) {
+		for (int k=0; k<2; k++){
+			temp[k] = data%10;
+			data = data / 10;
+		}
+		temp[2] = 0;
+		}else {
+		temp[0] = data;
+		temp[1] = 0;
+		temp[2] = 0;
+	}
+	
+	for (int k=0; k<3; k++){
+		while ( !( UCSR0A & (1<<UDRE0)) );
+		UDR0 = temp[k];
+		_delay_us(1);
+	}
+	
+	_delay_ms(1);
+	
+}

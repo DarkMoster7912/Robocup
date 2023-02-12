@@ -13,7 +13,8 @@ float limita(float x, float I, float F);
  
 void Serial_Init();//Init
 void Serial_Tx( unsigned char data );//TRASMISSIONE
-/*unsigned char*/ int Serial_Rx( void );//RICEVI
+void Serial_Tx1( int data );
+unsigned char Serial_Rx( void );//RICEVI
 void Serial_Send_Int(int64_t num);//NUMERO
 void Serial_Send_String(char *string1);//STRINGA
 void Serial_Send_Float(double val);

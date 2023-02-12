@@ -1,33 +1,32 @@
 #define F_CPU 16000000UL
 #define KTIMER_256 1000000UL/62500UL //durata tick timer con N = 256 --> 64us
-#define K_ENCODER1 990UL //n� impulsi in un giro Motore 1
-#define K_ENCODER2 620UL //n� impulsu Motore 2
+#define K_ENCODER1 990UL //n? impulsi in un giro Motore 1
+#define K_ENCODER2 620UL //n? impulsu Motore 2
 #define K_ENCODER3 990UL //Motore 3
 #define K_ENCODER4 990UL //MOtore 4
 
 #define SET_POINT_VELOCITA 1500.0
-#define SET_START_PWM 1000
+#define SET_INT_PWM 1000
 
 #define I_MAX 1023
 #define I_MIN -0
-#define KI 0.457//0.152// da settare 
+#define KI 0.457// da settare
 #define KP 4.28//da settare
 #define KD 0.0//da settare
 
 #include <avr/io.h>
 #include <time.h>
 #include <util/delay.h>
-#include <util/twi.h>
 #include <avr/interrupt.h>
 #include "serial.h"
-#include "I2C.h"
+#include "Pid_PWM.h"
 
 
 volatile double e_1=0, e_old_1;//errore pid1
 volatile double p_1=0, i_1=0, d_1=0, i_old_1=0, pid1=0;//variabili pid1
- 
- volatile double e_2=0, e_old_2;//errore pid2
- volatile double p_2=0, i_2=0, d_2=0, i_old_2=0, pid2=0;//variabili pid2
+
+volatile double e_2=0, e_old_2;//errore pid2
+volatile double p_2=0, i_2=0, d_2=0, i_old_2=0, pid2=0;//variabili pid2
 
 volatile double e_3=0, e_old_3;//errore pid3
 volatile double p_3=0, i_3=0, d_3=0, i_old_3=0, pid3=0;//variabili pid3
@@ -35,7 +34,7 @@ volatile double p_3=0, i_3=0, d_3=0, i_old_3=0, pid3=0;//variabili pid3
 volatile double e_4=0, e_old_4;//errore pid4
 volatile double p_4=0, i_4=0, d_4=0, i_old_4=0, pid4=0;//variabili pid4
 
- 
+
 volatile int t_1=0, t_old_1=0;
 volatile int deltat_1, deltat_old_1;
 volatile int velocita_1;
@@ -51,31 +50,6 @@ volatile int velocita_3;
 volatile int t_4=0, t_old_4=0;
 volatile int deltat_4, deltat_old_4;
 volatile int velocita_4;
-
-
-volatile int seg_enc=0;
-
-#define DATA_LENGHT 5
-volatile int data = 0;//[DATA_LENGHT];
-volatile int k=0;
-void I2C_received(uint8_t received_data)
-{
-	data = received_data;
-	/*if(k==6){
-		k=0;
-		data [k] = received_data;
-		}else{
-		data[k] = received_data;
-		k++;
-	}*/
-}
-
-void I2C_requested()
-{
-	I2C_transmitByte(data);
-}
-
-
 
 ISR(INT2_vect){//interrupt encoder1
 	t_1 = (int32_t) TCNT5;
@@ -123,7 +97,7 @@ void Init_PWM4(){//Motore 4
 
 /*void Init_PWM_Servo(){
 	TCCR2A = (1<<COM2A1) | (1<<WGM21) | (1<<WGM20);
-	//ddrb � nel init pwm123
+	//ddrb ? nel init pwm123
 }*/
 
 void Start_PWM123(){//Motore 1/2/3
@@ -152,10 +126,6 @@ void Set_PWM3(int duty_3){//Motore 3
 
 void Set_PWM4(int duty_4){//Motore 4
 	OCR3A = duty_4;
-}
-
-void Set_Servo(int duty_5){
-	OCR4B = duty_5;
 }
 
 void PID1(){//pid motore 1
@@ -250,29 +220,6 @@ void PID4(){//pid motore 4
 	Set_PWM4((int) pid4);
 }
 
-void fermo(){
-	OCR1A = 0;
-	OCR1B = 0;
-	OCR1C = 0;
-	OCR3A = 0;
-}
-
-void sinistra(){
-	PORTA = (1<<PA1) | (1<<PA2) | (1<<PA5) | (1<<PA6);
-	Set_PWM1(SET_POINT_VELOCITA);
-	Set_PWM2(SET_POINT_VELOCITA);
-	Set_PWM3(SET_POINT_VELOCITA);
-	Set_PWM4(SET_POINT_VELOCITA);
-}
-
-void avanti(){
-	PORTA = (1<<PA0) | (1<<PA3) | (1<<PA4)| (1<<PA7);//Verso motore
-	Set_PWM1(SET_START_PWM);
-	Set_PWM2(SET_START_PWM);
-	Set_PWM3(SET_START_PWM);
-	Set_PWM4(SET_START_PWM);
-}
-
 ISR(TIMER4_COMPA_vect){
 	PID1();
 	PID2();
@@ -281,162 +228,63 @@ ISR(TIMER4_COMPA_vect){
 	TCNT4 = 0;
 }
 
-
-
-int main(void)
-{
-	Serial_Init();
-	//PID
-	//_delay_ms(1500);
-	EICRA = (1<<ISC20) | (1<<ISC21) | (1<<ISC30) | (1<<ISC31);//interrupt rising edge
-	EICRB = (1<<ISC40) | (1<<ISC41) | (1<<ISC50) | (1<<ISC51);
-	EIMSK = 1<<INT2 | 1<<INT3 | 1<<INT4 |1<<INT5;//attivamento interrupt esterni
-	sei();//attivamento ogni interrupt
-	
-	DDRA = 0xFF;
-	PORTA = (1<<PA0) | (1<<PA3) | (1<<PA4)| (1<<PA7);//Verso motore
+void PWM(){
 	
 	TCCR5A = 0;
 	TCCR5B = 1<<CS52;
 	
-	//fa partire interrupt ogni millisecondo --> attiva pid
-// 	TCCR4A = 0;
-// 	TCCR4B = (1<<WGM42) | (1<<CS41) | (1<<CS40); //f = 250KHz
-// 	TIMSK4=1<<OCIE4A;
-// 	OCR4A = 250;
+	//DDRH = 1<<PH4;
+	DDRA = 0xFF;
 	
+	Init_PWM123();
+	Init_PWM4();
+	
+	Start_PWM123();
+	Start_PWM4();
+	
+	Set_PWM1(SET_INT_PWM);
+	Set_PWM2(SET_INT_PWM);
+	Set_PWM3(SET_INT_PWM);
+	Set_PWM4(SET_INT_PWM);
+}
+
+void PID(){
 	TCCR4A = (1<<COM1B1) | (1<<WGM41) | (1<<WGM40);//inizializza il servo
 	TCCR4B = (1<<WGM42) | (1<<CS42);//N=256
 	TIMSK4 = 1<<OCIE4A;
 	OCR4A = 62;
-	DDRH = 1<<PH4;
 	
-	Init_PWM123();
-	Init_PWM4();
-	//Init_PWM_Servo();
-	
-	Start_PWM123();
-	Start_PWM4();
-	//Start_PWM_Servo();
-	
-	Set_PWM1(SET_START_PWM);
-	Set_PWM2(SET_START_PWM);
-	Set_PWM3(SET_START_PWM);
-	Set_PWM4(SET_START_PWM);
-	//Set_Servo(100);
-	
-	//ADC
-	//int k;
-	/*ADMUX = (1<<REFS0);
-	ADCSRB = 0;
-	ADCSRA = (1<<ADEN) | (1<<ADPS2) | (1<<ADPS1);*/
-	
-	
-	int i;
-	/*init_interrupt();
-	init_TWI();*/
-	
-	
-	I2C_init(0x10);
-	I2C_setCallbacks(I2C_received, I2C_requested);
-	
-	
-	/*int i;
-	for (i=0; i<DATA_LENGHT; i++){
-		data[i] = 0;
-	}*/
-	
-	
-	DDRF = 1;
-    while (1) 
-    {
-		//Serial_Send("e= "); Serial_Send(e); Serial_Send("\n");
-		//Serial_Send("p= "); Serial_Send(p); Serial_Send("\n");
-		//Serial_Send("i= "); Serial_Send(i); Serial_Send("\n");
-		//Serial_Send("d= "); Serial_Send(d); Serial_Send("\n");
-		//Serial_Send("pid= "); Serial_Send(pid1); Serial_Send("\n");
-		/*Serial_Send("velocita1= "); Serial_Send(velocita_1); Serial_Send("\n");
-		Serial_Send("velocita2= "); Serial_Send(velocita_2); Serial_Send("\n");
-		Serial_Send("velocita3= "); Serial_Send(velocita_3); Serial_Send("\n");
-		Serial_Send("velocita4= "); Serial_Send(velocita_4); Serial_Send("\n");
-		Serial_Send("\n");*/
-		//_delay_ms(250);
-		//Serial_Send("OCR3A= "); Serial_Send(OCR3A); Serial_Send("\n");
-		//Serial_Send("deltat= "); Serial_Send(deltat_4); Serial_Send("\n");
-		//_delay_ms(500);
-		
-		/*ADCSRA = ADCSRA | (1<<ADSC);
-		while((ADCSRA&(1<<ADSC))!=0);
-		k = ADC;
-		Serial_Send(k);
-		Serial_Send("\n");*/
-		
-		
-		//Serial_Send(OCR3A); Serial_Send("\n");
-		
-		
-		/*Set_Servo(30);
-		_delay_ms(1500);
-		Set_Servo(200);
-		_delay_ms(1500);*/
-		
-		
-		//s = conversione();
-		//Serial_Send(s); Serial_Send("\n");
-		
-		//init_TWI();
-		/*avanti();
-		_delay_ms(1000);
-		fermo();
-		_delay_ms(1000);*/
-		//init_interrupt();
-		/*init_TWI();
-		do{
-			s = conversione();
-			Serial_Send(s); Serial_Send("\n");
-		} while ((s != 0x27));
-		Serial_Send("fermo dopo giro");
-		_delay_ms(10000);
-		TWI_Stop();*/
-		
-		
-		/*_delay_ms(2500);
-		fermo();
-		_delay_ms(1000);
-		sinistra();
-		while(data != 2);
-		fermo();
-		_delay_ms(1000);
-		avanti();*/
-		
-		
-		/*s = Serial_Rx();
-		if(s == 10){
-			PORTF = 1;
-		}*/
-		
-		
-/*
-		int i;
-		for(i=0; i<5; i++){
-			Serial_Send(data[i]); Serial_Send("\t\t");
-		}
-		Serial_Send("\n");
-*/
-		
-		
-		Serial_Send(data);/*Serial_Send("\t\t");Serial_Send(data);*/Serial_Send("\n");
-		if(data == 0x50){
-			for(i=0; i<5; i++){
-				PORTF = 1;
-				_delay_ms(1000);
-				PORTF = 0;
-				_delay_ms(1000);
-			}
-		}
-		
-		
-		
-    }
+	EICRA = (1<<ISC20) | (1<<ISC21) | (1<<ISC30) | (1<<ISC31);//interrupt rising edge
+	EICRB = (1<<ISC40) | (1<<ISC41) | (1<<ISC50) | (1<<ISC51);
+	EIMSK = 1<<INT2 | 1<<INT3 | 1<<INT4 |1<<INT5;//attivamento interrupt esterni
+	sei();//attivamento ogni interrupt
 }
 
+void avanti(){
+	PORTA = (1<<PA0) | (1<<PA3) | (1<<PA4)| (1<<PA7);//Verso motore
+	Start_PWM123();
+	Start_PWM4();
+}
+
+void indietro(){
+	PORTA = (1<<PA0) | (1<<PA2) | (1<<PA5) | (1<<PA6);
+	Start_PWM123();
+	Start_PWM4();
+}
+
+void destra(){
+	PORTA = (1<<PA0) | (1<<PA2) | (1<<PA4) | (1<<PA6);
+	Start_PWM123();
+	Start_PWM4();
+}
+
+void sinistra(){
+	PORTA = (1<<PA1) | (1<<PA3) | (1<<PA5) | (1<<PA7);
+	Start_PWM123();
+	Start_PWM4();
+}
+
+void stop_tutto(){
+	TCCR1B = 0;
+	TCCR3B = 0;
+}
